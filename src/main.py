@@ -9,21 +9,33 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
-from recommender import load_songs, recommend_songs
+from recommender import load_songs, recommend_songs_with_rag
 
 
 def print_recommendations(label: str, recommendations: list) -> None:
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print(f"  {label}")
-    print("=" * 50)
+    print("=" * 60)
     for rank, (song, score, explanation) in enumerate(recommendations, start=1):
         print(f"\n#{rank}  {song['title']} — {song['artist']}")
         print(f"     Score : {score:.2f} / 1.00")
         print(f"     Genre : {song['genre']}   Mood: {song['mood']}")
         print(f"     Why   :")
-        for reason in explanation.split(" | "):
-            print(f"             • {reason}")
-        print("-" * 50)
+        # Handle both technical (split by |) and AI-generated (longer) explanations
+        if " | " in explanation:
+            for reason in explanation.split(" | "):
+                print(f"             • {reason}")
+        else:
+            # For AI-generated explanations, wrap text nicely
+            import textwrap
+            wrapped = textwrap.fill(
+                explanation,
+                width=55,
+                initial_indent="             • ",
+                subsequent_indent="               "
+            )
+            print(wrapped)
+        print("-" * 60)
 
 
 def main() -> None:
@@ -248,7 +260,7 @@ def main() -> None:
     ]
 
     for label, prefs in profiles:
-        recommendations = recommend_songs(prefs, songs, k=5)
+        recommendations = recommend_songs_with_rag(prefs, songs, k=5, use_ai=True)
         print_recommendations(label, recommendations)
 
 

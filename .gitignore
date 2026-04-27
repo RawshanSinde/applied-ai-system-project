@@ -8,6 +8,11 @@ __pycache__/
 env/
 venv/
 
+# Environment variables and API keys
+.env
+.env.local
+.env.*.local
+
 # OS files
 .DS_Store
 

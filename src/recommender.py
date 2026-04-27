@@ -1,5 +1,6 @@
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+from rag import RAGExplainer
 
 @dataclass
 class Song:
@@ -125,3 +126,63 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
 
     # Join reasons into a single explanation string for each result
     return [(song, score, " | ".join(reasons)) for song, score, reasons in ranked[:k]]
+
+
+def recommend_songs_with_rag(
+    user_prefs: Dict,
+    songs: List[Dict],
+    k: int = 5,
+    use_ai: bool = True,
+    api_key: Optional[str] = None,
+) -> List[Tuple[Dict, float, str]]:
+    """
+    Enhanced recommendation system with RAG (Retrieval-Augmented Generation).
+
+    Retrieves top-k songs using scoring, then uses an LLM to generate
+    personalized, conversational explanations (generation).
+
+    Args:
+        user_prefs: User preference dict with features and weights
+        songs: Catalog of songs to recommend from
+        k: Number of recommendations to return
+        use_ai: If True, use LLM for explanations; if False, use basic scoring explanations
+        api_key: OpenAI API key (optional, uses env var if not provided)
+
+    Returns:
+        List of (song, score, explanation) tuples with AI-powered explanations
+    """
+    # Step 1: RETRIEVAL — Get top-k candidate songs using traditional scoring
+    scored = [
+        (song, score, reasons)
+        for song in songs
+        for score, reasons in [score_song(user_prefs, song)]
+    ]
+    ranked = sorted(scored, key=lambda x: x[1], reverse=True)[:k]
+
+    # Step 2: GENERATION — Use LLM to create personalized explanations
+    if use_ai:
+        try:
+            explainer = RAGExplainer(api_key=api_key)
+            results = []
+            for song, score, reasons in ranked:
+                # Get top 2-3 matching features for LLM context
+                top_features = reasons[:3]
+                # Generate AI explanation
+                ai_explanation = explainer.generate_explanation(
+                    song, user_prefs, score, top_features
+                )
+                results.append((song, score, ai_explanation))
+            return results
+        except Exception as e:
+            # Fallback to basic explanations if RAG fails
+            print(f"RAG generation failed: {e}. Using basic explanations.")
+            return [
+                (song, score, " | ".join(reasons))
+                for song, score, reasons in ranked
+            ]
+    else:
+        # Return basic explanations without LLM
+        return [
+            (song, score, " | ".join(reasons))
+            for song, score, reasons in ranked
+        ]
