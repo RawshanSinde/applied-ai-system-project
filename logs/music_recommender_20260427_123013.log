@@ -1,0 +1,5 @@
+2026-04-27 12:30:13 | music_recommender | INFO     | setup_logging:72 | Logging initialized | Level: INFO | Log file: logs/music_recommender_20260427_123013.log
+2026-04-27 12:30:13 | music_recommender | INFO     | load_songs:67 | Loading songs from: data/songs.csv
+2026-04-27 12:30:13 | music_recommender | INFO     | load_songs:108 | Successfully loaded 20 songs from data/songs.csv
+2026-04-27 12:30:13 | music_recommender | INFO     | recommend_songs_with_rag:202 | Generating recommendations: k=3, use_ai=False, songs_available=20
+2026-04-27 12:30:13 | music_recommender | INFO     | recommend_songs_with_rag:221 | Retrieved top 3 songs from 20 total

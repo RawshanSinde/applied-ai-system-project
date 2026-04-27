@@ -1,6 +1,8 @@
+import os
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from rag import RAGExplainer
+from logger_config import logger
 
 @dataclass
 class Song:
@@ -49,27 +51,70 @@ class Recommender:
 def load_songs(csv_path: str) -> List[Dict]:
     """
     Loads songs from a CSV file.
-    Required by src/main.py
+    
+    Args:
+        csv_path: Path to the CSV file containing song data
+        
+    Returns:
+        List of song dictionaries
+        
+    Raises:
+        FileNotFoundError: If CSV file doesn't exist
+        ValueError: If CSV is malformed or missing required columns
     """
     import csv
-
-    songs = []
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            songs.append({
-                "id":           int(row["id"]),
-                "title":        row["title"],
-                "artist":       row["artist"],
-                "genre":        row["genre"],
-                "mood":         row["mood"],
-                "energy":       float(row["energy"]),
-                "tempo_bpm":    int(row["tempo_bpm"]),
-                "valence":      float(row["valence"]),
-                "danceability": float(row["danceability"]),
-                "acousticness": float(row["acousticness"]),
-            })
-    return songs
+    
+    logger.info(f"Loading songs from: {csv_path}")
+    
+    try:
+        if not os.path.exists(csv_path):
+            logger.error(f"CSV file not found: {csv_path}")
+            raise FileNotFoundError(f"Song data file not found: {csv_path}")
+        
+        songs = []
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            
+            # Validate headers
+            if reader.fieldnames is None:
+                raise ValueError("CSV file is empty or malformed")
+            
+            required_fields = {
+                "id", "title", "artist", "genre", "mood", "energy",
+                "tempo_bpm", "valence", "danceability", "acousticness"
+            }
+            missing_fields = required_fields - set(reader.fieldnames)
+            if missing_fields:
+                raise ValueError(f"CSV missing required columns: {missing_fields}")
+            
+            for row_num, row in enumerate(reader, start=2):  # start=2 because row 1 is header
+                try:
+                    songs.append({
+                        "id":           int(row["id"]),
+                        "title":        row["title"],
+                        "artist":       row["artist"],
+                        "genre":        row["genre"],
+                        "mood":         row["mood"],
+                        "energy":       float(row["energy"]),
+                        "tempo_bpm":    int(row["tempo_bpm"]),
+                        "valence":      float(row["valence"]),
+                        "danceability": float(row["danceability"]),
+                        "acousticness": float(row["acousticness"]),
+                    })
+                except (ValueError, KeyError) as e:
+                    logger.error(f"Error parsing row {row_num}: {str(e)}")
+                    raise ValueError(f"Invalid data in row {row_num}: {str(e)}")
+        
+        logger.info(f"Successfully loaded {len(songs)} songs from {csv_path}")
+        return songs
+        
+    except FileNotFoundError:
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error loading songs: {str(e)}", exc_info=True)
+        raise
 
 def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     """Returns a weighted match score (0.0–1.0) and a list of per-feature reason strings for one song."""
@@ -150,39 +195,69 @@ def recommend_songs_with_rag(
 
     Returns:
         List of (song, score, explanation) tuples with AI-powered explanations
+        
+    Raises:
+        ValueError: If user_prefs is invalid or k > available songs
     """
-    # Step 1: RETRIEVAL — Get top-k candidate songs using traditional scoring
-    scored = [
-        (song, score, reasons)
-        for song in songs
-        for score, reasons in [score_song(user_prefs, song)]
-    ]
-    ranked = sorted(scored, key=lambda x: x[1], reverse=True)[:k]
+    logger.info(f"Generating recommendations: k={k}, use_ai={use_ai}, songs_available={len(songs)}")
+    
+    if k > len(songs):
+        logger.warning(f"Requested k={k} but only {len(songs)} songs available. Using all songs.")
+        k = len(songs)
+    
+    if not songs:
+        logger.error("No songs available for recommendations")
+        raise ValueError("No songs available for recommendations")
+    
+    try:
+        # Step 1: RETRIEVAL — Get top-k candidate songs using traditional scoring
+        logger.debug("Starting retrieval phase: scoring all songs")
+        scored = [
+            (song, score, reasons)
+            for song in songs
+            for score, reasons in [score_song(user_prefs, song)]
+        ]
+        ranked = sorted(scored, key=lambda x: x[1], reverse=True)[:k]
+        logger.info(f"Retrieved top {len(ranked)} songs from {len(songs)} total")
 
-    # Step 2: GENERATION — Use LLM to create personalized explanations
-    if use_ai:
-        try:
-            explainer = RAGExplainer(api_key=api_key)
-            results = []
-            for song, score, reasons in ranked:
-                # Get top 2-3 matching features for LLM context
-                top_features = reasons[:3]
-                # Generate AI explanation
-                ai_explanation = explainer.generate_explanation(
-                    song, user_prefs, score, top_features
-                )
-                results.append((song, score, ai_explanation))
-            return results
-        except Exception as e:
-            # Fallback to basic explanations if RAG fails
-            print(f"RAG generation failed: {e}. Using basic explanations.")
+        # Step 2: GENERATION — Use LLM to create personalized explanations
+        if use_ai:
+            logger.debug("Starting generation phase: using AI for explanations")
+            try:
+                explainer = RAGExplainer(api_key=api_key)
+                results = []
+                for idx, (song, score, reasons) in enumerate(ranked, 1):
+                    try:
+                        # Get top 2-3 matching features for LLM context
+                        top_features = reasons[:3]
+                        # Generate AI explanation
+                        ai_explanation = explainer.generate_explanation(
+                            song, user_prefs, score, top_features
+                        )
+                        results.append((song, score, ai_explanation))
+                        logger.debug(f"Generated explanation {idx}/{len(ranked)} for: {song.get('title', 'Unknown')}")
+                    except Exception as e:
+                        logger.warning(f"Failed to generate AI explanation for song {idx}, using fallback: {str(e)}")
+                        results.append((song, score, " | ".join(reasons)))
+                
+                logger.info(f"Successfully generated {len(results)} recommendations with AI")
+                return results
+                
+            except Exception as e:
+                # Fallback to basic explanations if RAG fails
+                logger.warning(f"RAG generation failed: {str(e)}. Falling back to basic explanations.")
+                return [
+                    (song, score, " | ".join(reasons))
+                    for song, score, reasons in ranked
+                ]
+        else:
+            # Return basic explanations without LLM
+            logger.debug("Generating basic explanations without AI")
             return [
                 (song, score, " | ".join(reasons))
                 for song, score, reasons in ranked
             ]
-    else:
-        # Return basic explanations without LLM
-        return [
-            (song, score, " | ".join(reasons))
-            for song, score, reasons in ranked
-        ]
+            
+    except Exception as e:
+        logger.error(f"Fatal error in recommendation generation: {str(e)}", exc_info=True)
+        raise

@@ -12,6 +12,7 @@ import os
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import openai
+from logger_config import logger
 
 # Load environment variables from .env file
 load_dotenv()
@@ -27,9 +28,13 @@ class RAGExplainer:
         Args:
             api_key: OpenAI API key (uses OPENAI_API_KEY env var if not provided)
             model: Model to use for generation (default: gpt-3.5-turbo)
+
+        Raises:
+            ValueError: If API key is not found
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
+            logger.error("OpenAI API key not found in environment or parameters")
             raise ValueError(
                 "OpenAI API key not found. "
                 "Set OPENAI_API_KEY environment variable or pass api_key parameter."
@@ -37,6 +42,7 @@ class RAGExplainer:
 
         self.client = openai.OpenAI(api_key=self.api_key)
         self.model = model
+        logger.info(f"RAGExplainer initialized with model: {model}")
 
     def generate_explanation(
         self,
@@ -87,19 +93,27 @@ Generate a natural, conversational explanation that highlights why this song fit
 Keep it short and engaging, like a friend recommending a song."""
 
         try:
+            logger.debug(f"Generating explanation for song: {song.get('title', 'Unknown')}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=150,
             )
-            return response.choices[0].message.content.strip()
+            explanation = response.choices[0].message.content.strip()
+            logger.debug(f"Successfully generated explanation for: {song.get('title', 'Unknown')}")
+            return explanation
         except openai.APIError as e:
+            logger.warning(f"OpenAI API error for song '{song.get('title', 'Unknown')}': {str(e)}")
             # Fallback to basic explanation if API fails
+            return self._fallback_explanation(song, top_matching_features)
+        except Exception as e:
+            logger.error(f"Unexpected error generating explanation: {str(e)}", exc_info=True)
             return self._fallback_explanation(song, top_matching_features)
 
     def _fallback_explanation(self, song: Dict, features: List[str]) -> str:
         """Fallback explanation if LLM API fails."""
+        logger.info(f"Using fallback explanation for: {song.get('title', 'Unknown')}")
         reasons = " and ".join(features[:2]) if features else "strong match"
         return f"{song['title']} by {song['artist']} is a great fit because: {reasons}."
 
