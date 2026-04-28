@@ -16,7 +16,7 @@ from pathlib import Path
 # Add src to path so we can import modules
 sys.path.insert(0, os.path.dirname(__file__))
 
-from recommender import load_songs, recommend_songs_with_rag
+from recommender import load_songs, recommend_songs_with_rag, confidence_label
 from logger_config import logger
 
 
@@ -26,8 +26,8 @@ def print_recommendations(label: str, recommendations: list) -> None:
     print("=" * 60)
     for rank, (song, score, explanation) in enumerate(recommendations, start=1):
         print(f"\n#{rank}  {song['title']} — {song['artist']}")
-        print(f"     Score : {score:.2f} / 1.00")
-        print(f"     Genre : {song['genre']}   Mood: {song['mood']}")
+        print(f"     Score      : {score:.2f} / 1.00  [{confidence_label(score)} confidence]")
+        print(f"     Genre      : {song['genre']}   Mood: {song['mood']}")
         print(f"     Why   :")
         # Handle both technical (split by |) and AI-generated (longer) explanations
         if " | " in explanation:

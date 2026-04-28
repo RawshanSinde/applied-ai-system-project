@@ -116,6 +116,15 @@ def load_songs(csv_path: str) -> List[Dict]:
         logger.error(f"Unexpected error loading songs: {str(e)}", exc_info=True)
         raise
 
+def confidence_label(score: float) -> str:
+    """Translate a 0–1 match score into a human-readable confidence tier."""
+    if score >= 0.80:
+        return "High"
+    elif score >= 0.60:
+        return "Medium"
+    return "Low"
+
+
 def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     """Returns a weighted match score (0.0–1.0) and a list of per-feature reason strings for one song."""
     weights = user_prefs["weights"]

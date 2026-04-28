@@ -146,8 +146,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
 ============================================================
 
 #1  Can't Tame Her — Zara Larsson
-     Score : 0.93 / 1.00
-     Genre : dance pop   Mood: confident
+     Score      : 0.93 / 1.00  [High confidence]
+     Genre      : dance pop   Mood: confident
      Why   :
              • Can't Tame Her is practically built for your playlist —
                it nails your confident mood, matches your energy level
@@ -155,8 +155,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                clearly chasing. This one's a no-brainer.
 
 #2  Espresso — Sabrina Carpenter
-     Score : 0.84 / 1.00
-     Genre : electropop   Mood: confident
+     Score      : 0.84 / 1.00  [High confidence]
+     Genre      : electropop   Mood: confident
      Why   :
              • Espresso matches your vibe almost perfectly on feel —
                same confident energy, near-identical acousticness, and
@@ -165,8 +165,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                sonically it belongs right next to Can't Tame Her.
 
 #3  Midnight Sun — Zara Larsson
-     Score : 0.77 / 1.00
-     Genre : dance pop   Mood: euphoric
+     Score      : 0.77 / 1.00  [Medium confidence]
+     Genre      : dance pop   Mood: euphoric
      Why   :
              • Midnight Sun hits your genre and audio targets well,
                and "euphoric" sits right next to "confident" in feel.
@@ -199,8 +199,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
 ============================================================
 
 #1  Library Rain — Paper Lanterns
-     Score : 0.91 / 1.00
-     Genre : lofi   Mood: chill
+     Score      : 0.91 / 1.00  [High confidence]
+     Genre      : lofi   Mood: chill
      Why   :
              • Library Rain is exactly what you're looking for —
                a calm, organic-sounding track with low energy and
@@ -209,8 +209,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                without feeling static.
 
 #2  Midnight Coding — LoRoom
-     Score : 0.87 / 1.00
-     Genre : lofi   Mood: chill
+     Score      : 0.87 / 1.00  [High confidence]
+     Genre      : lofi   Mood: chill
      Why   :
              • Midnight Coding is a reliable study companion — low
                energy, warm acoustics, and a chill mood that won't
@@ -218,8 +218,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                Library Rain but with a slightly more electronic texture.
 
 #3  Spacewalk Thoughts — Orbit Bloom
-     Score : 0.79 / 1.00
-     Genre : ambient   Mood: chill
+     Score      : 0.79 / 1.00  [Medium confidence]
+     Genre      : ambient   Mood: chill
      Why   :
              • Spacewalk Thoughts is the quietest track in the catalog
                and its energy of 0.28 is the closest thing to your
@@ -253,8 +253,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
 ============================================================
 
 #1  Storm Runner — Voltline
-     Score : 0.95 / 1.00
-     Genre : rock   Mood: intense
+     Score      : 0.95 / 1.00  [High confidence]
+     Genre      : rock   Mood: intense
      Why   :
              • Storm Runner is the only true rock track in the catalog
                and it delivers exactly what you want — near-maximum
@@ -262,8 +262,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                and minimal acousticness. This is the clear #1.
 
 #2  Gym Hero — Max Pulse
-     Score : 0.71 / 1.00
-     Genre : pop   Mood: intense
+     Score      : 0.71 / 1.00  [Medium confidence]
+     Genre      : pop   Mood: intense
      Why   :
              • Gym Hero doesn't have the rock tag, but it matches your
                intensity and energy almost perfectly — 0.93 energy and
@@ -272,8 +272,8 @@ Each example shows the user preference profile passed in and the AI-generated ou
                differs.
 
 #3  Night Drive Loop — Neon Echo
-     Score : 0.58 / 1.00
-     Genre : synthwave   Mood: moody
+     Score      : 0.58 / 1.00  [Low confidence]
+     Genre      : synthwave   Mood: moody
      Why   :
              • Night Drive Loop slides in here on energy and tempo more
                than mood — it's moody rather than intense, but the
@@ -311,31 +311,56 @@ It is fast, cheap (~$0.001 per run), and more than capable for 2–3 sentence ex
 
 ## Testing Summary
 
-### What was tested
+**14 out of 14 automated tests pass. 5 out of 5 integration checks pass. 4 out of 7 adversarial profiles produced the expected result; 3 exposed real silent-failure bugs.**
 
-**Unit tests** (`tests/test_recommender.py`) cover the OOP interface: `Song`, `UserProfile`, and `Recommender`. They verify that `recommend()` returns results sorted with the best match first and that `explain_recommendation()` returns a non-empty string.
+### Automated tests
 
-**Integration tests** (`test_rag_integration.py`) verify the full pipeline end-to-end without making API calls: `load_songs()` correctly parses the CSV, `score_song()` returns a score in the expected range, `recommend_songs()` returns properly-formatted tuples, and `recommend_songs_with_rag(use_ai=False)` works without an API key.
+Run with:
 
-**Manual adversarial testing** (documented in [model_card.md](model_card.md)) ran seven profiles including four edge cases: a mood that doesn't exist in the catalog, a phantom genre and mood, inflated weights summing to 1.80, and an energy value of 1.5 outside the valid 0–1 range.
+```bash
+pytest tests/ -v                 # 14 unit tests
+python test_rag_integration.py   # 5 integration checks
+```
 
-### What worked
+| Test file | Coverage | Result |
+|---|---|---|
+| `tests/test_recommender.py` | OOP interface: `Song`, `UserProfile`, `Recommender.recommend()` | 2 / 2 passed |
+| `tests/test_scoring.py` | `score_song`, `recommend_songs`, `load_songs`, `confidence_label` | 12 / 12 passed |
+| `test_rag_integration.py` | Full pipeline without API: load → score → recommend → RAG import | 5 / 5 passed |
 
-- The scoring logic correctly surfaces the most musically intuitive results for well-represented profiles. Can't Tame Her and Espresso consistently ranked at the top of high-energy pop profiles for the right reasons.
-- The RAG layer produces explanations that are meaningfully specific to each song — not generic filler — because the prompt passes actual feature values and matching reasons.
-- The fallback chain works reliably: API error → `_fallback_explanation()` → technical string. The system never crashes on an API failure.
-- Structured logging made it easy to trace exactly what the system did on each run, including which songs were scored and which API calls were made.
+### Confidence scoring
 
-### What didn't work
+Every recommendation now includes a confidence tier derived from the match score:
 
-- **Silent failures on adversarial inputs**: setting mood to `"sad"` (a label not in the catalog) produced no warning. The mood weight silently contributed 0 to every score, and the system confidently recommended a gym anthem as the top result. There is no out-of-distribution detection.
-- **Scores above 1.0**: inflated weights (sum = 1.80) caused scores to exceed the advertised 0–1 range with no validation error.
-- **Tempo has no effect**: the tempo weight is hardcoded to 0 in `score_song()`, so it appears in the output breakdown but changes nothing. This was a known shortcut.
-- **Catalog depth**: genres with only one song (rock, jazz, ambient) always return the same #1 result regardless of the user's other preferences. There is no diversity in those results.
+| Score | Label | Meaning |
+|---|---|---|
+| ≥ 0.80 | **High** | Strong match across most features |
+| 0.60 – 0.79 | **Medium** | Reasonable match; some features misaligned |
+| < 0.60 | **Low** | Weak match — catalog may not cover this taste |
 
-### What this taught about testing AI systems
+Scores in the High-Energy Pop and Chill Lofi profiles averaged **0.85** (High confidence). The Deep Intense Rock profile averaged **0.75** (Medium), reflecting the single-song rock catalog limitation. The Low confidence result for Night Drive Loop (0.58) correctly signals that synthwave is a poor substitute for rock.
 
-The most important lesson was that AI-adjacent systems can produce output that *looks* correct while being completely wrong. A score of 0.67 and a printed explanation give the impression of a working recommendation — but if 20% of the scoring budget was silently discarded because the user's mood label didn't match anything in the catalog, that confidence is false. Testing AI systems requires adversarial inputs and checking the *meaning* of outputs, not just whether the system ran without errors.
+### Logging and error handling
+
+Every function logs at the appropriate level to `logs/music_recommender_<timestamp>.log`:
+
+- `INFO` on successful song loads, recommendation counts, and AI generation
+- `WARNING` on API failures or fallback activation
+- `ERROR` with full stack traces on unexpected exceptions
+
+This means every run leaves an auditable trail. If the system silently falls back from AI to technical explanations, the reason appears in the log even though the CLI output looks the same.
+
+### Adversarial / human evaluation
+
+Seven profiles were tested manually (see [model_card.md](model_card.md)):
+
+- **3 normal profiles** (High-Energy Pop, Chill Lofi, Deep Intense Rock): top results matched musical intuition in all three cases ✓
+- **Mood not in catalog** (`"sad"`): system recommended Gym Hero with 0.67 score and no warning — silent failure ✗
+- **Phantom genre + mood** (`"classical"`, `"melancholic"`): 35% of score budget silently zeroed out ✗
+- **Inflated weights** (sum = 1.80): scores exceeded 1.0 with no validation error ✗
+- **Out-of-range energy** (1.5): negative score contributions, no crash but broken output range ✗
+
+The 3 silent failures were the most instructive: the system produced confident-looking output with no indication anything was wrong. That gap between "runs without error" and "produces correct output" is the defining challenge in testing AI-adjacent systems.
 
 ---
 
@@ -367,7 +392,9 @@ applied-ai-system-project/
 │   ├── rag.py                # RAGExplainer — OpenAI calls + fallback
 │   └── logger_config.py      # Structured logging to logs/
 ├── tests/
-│   └── test_recommender.py   # Unit tests (pytest)
+│   ├── test_recommender.py   # Unit tests — OOP interface (pytest)
+│   └── test_scoring.py       # Unit tests — scoring functions (pytest)
+├── conftest.py               # pytest path config (no PYTHONPATH needed)
 ├── test_rag_integration.py   # Integration tests (no API key needed)
 ├── logs/                     # Runtime logs (auto-created)
 ├── SYSTEM_DIAGRAM.md         # Full ASCII architecture diagram
