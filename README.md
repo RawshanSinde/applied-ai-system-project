@@ -27,13 +27,59 @@ This mirrors how production recommendation systems work at companies like Spotif
 
 ## Architecture Overview
 
-> See [SYSTEM_DIAGRAM.md](SYSTEM_DIAGRAM.md) for the full ASCII diagram.
-
 ```
-User Preferences → Retriever (score_song) → Top-K Candidates → RAG Generator (GPT-3.5) → CLI Output
-                                                                        ↓
-                                                                  Fallback Mode
-                                                            (API unavailable → technical string)
+┌─────────────────────────────────────────────────────────────────────┐
+│                          INPUTS                                     │
+│   User Preferences (UserProfile)                                    │
+│   genre · mood · energy · danceability · valence · acousticness     │
+│   + feature weights                                                 │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                    main.py  (Orchestrator)                        │
+│   Loads song catalog · Iterates user profiles · Prints results   │
+└──────────┬────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│           data/songs.csv  (Knowledge Base)                       │
+│   20 songs · id, title, artist, genre, mood,                     │
+│   energy, tempo_bpm, valence, danceability, acousticness         │
+└──────────┬───────────────────────────────────────────────────────┘
+           │  load_songs()
+           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│          RETRIEVER  —  recommender.py / score_song()             │
+│   • Categorical match: genre & mood  (exact → full weight)      │
+│   • Numerical proximity: energy, danceability, valence,          │
+│     acousticness  (1 − |target − actual|) × weight              │
+│   Sort descending → return top-k candidates + reason strings    │
+└──────────┬───────────────────────────────────────────────────────┘
+           │ top-k (song, score, [reasons])
+           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│         RAG GENERATOR  —  rag.py / RAGExplainer                  │
+│   Builds structured prompt: song features + user prefs           │
+│   + match score + top 3 matching reasons                         │
+│   Calls OpenAI GPT-3.5-turbo → conversational explanation        │
+│   Fallback ──────────────────────────► technical reason string  │
+└──────────┬───────────────────────────────────────────────────────┘
+           │ (song, score, confidence_label, ai_explanation)[]
+           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    OUTPUT  (printed to CLI)                       │
+│   #1  Song Title — Artist                                        │
+│        Score : 0.93 / 1.00  [High confidence]                    │
+│        Why   : "This track's driving beat and confident          │
+│                energy perfectly match your taste…"               │
+└──────────────────────────────────────────────────────────────────┘
+
+         ┌────────────────────────────────────────────────────────┐
+         │   TESTING LAYER  (human + automated)                   │
+         │   tests/test_scoring.py · tests/test_recommender.py   │
+         │   test_rag_integration.py · adversarial profiles      │
+         └────────────────────────────────────────────────────────┘
 ```
 
 | Component | File | Responsibility |
@@ -280,6 +326,34 @@ Each example shows the user preference profile passed in and the AI-generated ou
                electronic edge and 0.75 energy give it a similar drive.
                Consider this a cool-down track after Storm Runner.
 ```
+
+---
+
+## Demo Walkthrough
+
+> **Video demo:** *(Record a short Loom walkthrough and paste the link here — e.g. `https://www.loom.com/share/...`)*
+
+The screenshots below show three end-to-end runs using different user profiles. Each was captured from a live terminal session.
+
+### Run 1 — High-Energy Pop
+Profile: `dance pop` · `confident` mood · energy 0.78 · danceability 0.84
+
+![High-Energy Pop recommendations](assets/image-1.png)
+
+### Run 2 — Chill Lofi
+Profile: `lo-fi` · `chill` mood · energy 0.25 · acousticness 0.70
+
+![Chill Lofi recommendations](assets/image-2.png)
+
+### Run 3 — Deep Intense Rock
+Profile: `rock` · `intense` mood · energy 0.92 · tempo 140 BPM
+
+![Deep Intense Rock recommendations](assets/image-3.png)
+
+### Adversarial: Phantom Mood + Genre
+Profile: `classical` genre · `melancholic` mood — neither exists in the catalog. Shows what silent failure looks like: the system returns results without any warning that 35% of the scoring budget was silently zeroed out.
+
+![Phantom genre and mood recommendations](assets/image-5.png)
 
 ---
 
