@@ -378,6 +378,42 @@ For a future employer reading this: the skills demonstrated here — retrieval p
 
 ---
 
+## Responsible AI Reflection
+
+### Limitations and biases in this system
+
+The most structural bias is in the categorical scoring. Genre and mood use a binary exact-match rule: a song either matches the label or it doesn't, with no credit for adjacent categories. "Euphoric" and "confident" are treated as identically wrong as "euphoric" and "intense," even though the first pair is musically much closer. This means the system systematically underserves users whose taste doesn't map neatly onto the specific labels in the catalog.
+
+The catalog itself introduces a second layer of bias. It contains 20 songs that skew heavily toward pop, R&B, and dance music. Genres with a single entry — rock, jazz, ambient, synthwave, afrobeats — always produce the same top result regardless of the user's other preferences, because there's no variety to rank. Entire listener demographics have zero representation: there are no hip-hop, classical, metal, country, or Latin tracks. A user who listens to those genres doesn't get worse recommendations — they get recommendations that were never designed for them.
+
+There's also a bias toward the middle of the energy range. Songs with energy between 0.60 and 0.85 accumulate partial proximity credit from many different profiles and float into nearly every top-five list. Listeners who want very quiet or very intense music are underserved because the catalog has few options at the extremes.
+
+Finally, tempo is hardcoded to weight 0 in `score_song()`. It appears in the output and can be set in user profiles, but it has no effect on rankings. A runner who needs 140 BPM and a meditator who wants 60 BPM receive identical results.
+
+### Could this AI be misused?
+
+At the scale it's built — a 20-song catalog, a classroom project — direct misuse is low stakes. But the *pattern* it demonstrates is worth thinking about carefully.
+
+The system combines two things that together can cause harm at larger scale: a scoring algorithm that silently produces wrong results when inputs fall outside its assumptions, and an LLM explanation layer that makes every result — correct or not — sound personalized, specific, and confident. When a user asked for sad music and got Gym Hero, the output read: *"Gym Hero's powerful energy and high danceability make it a great match for your intensity preference."* It sounded authoritative. It was completely wrong for what the user wanted.
+
+The same architecture applied to higher-stakes domains — job screening, loan approval, medical triage — would produce the same silent failures with the same confident-sounding explanations. The mitigation isn't primarily technical: it's about where humans stay in the loop. For this system, the confidence tiers (High / Medium / Low) are a small step toward surfacing uncertainty. A production version of anything consequential would need explicit out-of-distribution detection, mandatory human review below a confidence threshold, and documentation of what the catalog or training data doesn't cover.
+
+### What surprised me while testing reliability
+
+The most surprising result was that silent failure is invisible from the outside. When the adversarial profile set mood to `"sad"` — a label that doesn't exist in the catalog — the scorer discarded 20% of the scoring budget silently, recommended a gym anthem with a score of 0.67, and printed a plausible-sounding explanation. Nothing in the output indicated anything was wrong. The confidence label showed "Medium," which technically reflected the score, but didn't capture that the score itself was based on corrupted inputs.
+
+The second surprise was a false-positive test. The existing `test_recommend_returns_songs_sorted_by_score` passes, but for the wrong reason: the `Recommender.recommend()` method is a stub that returns `songs[:k]` without any scoring, and the test passes only because the first song in the fixture happens to be the genre and mood the assertion checks. The test appears to validate sorting behavior but actually validates nothing about it. It's a reminder that a green test suite is not the same as a correct system.
+
+### Collaboration with AI (Claude) on this project
+
+This project was built with Claude as an active collaborator throughout — writing and refactoring code, authoring documentation, designing the test suite, and generating the system diagram.
+
+**One instance where the AI's suggestion was genuinely helpful:** When asked to prove the system works, Claude proposed adding a `confidence_label()` function that translates the 0–1 match score into a human-readable tier (High / Medium / Low) and surfacing it in every output line. This was more useful than just the raw score because it gave a non-technical reader an immediate signal about whether to trust a recommendation, and because a Low confidence result now communicates something the score alone doesn't — that the catalog may not cover the user's taste at all. It also created a concrete, testable function that could be verified independently of the LLM layer.
+
+**One instance where the AI's suggestion was flawed:** In the README's Sample Interactions section, Claude wrote "realistic" example outputs showing what GPT-3.5-turbo would say for each recommendation. Those outputs were fabricated — generated by Claude to illustrate what the system *might* produce, not based on actually running the code. They're plausible-sounding but invented, which means someone who clones the repo and runs it will see different explanations from the actual OpenAI API. Writing documentation about AI output without running the AI is itself a form of the same problem the system has: confident-sounding output that wasn't grounded in real retrieval. The correct version of that section would show actual terminal output from a live run.
+
+---
+
 ## Project Structure
 
 ```
